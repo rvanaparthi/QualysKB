@@ -24,7 +24,7 @@
           },
           "Uri": {
               "type": "string",
-              "defaultValue": "https://<API Server URL>/api/2.0/fo/asset/host/vm/detection/?action=list&vm_processed_after="
+              "defaultValue": "https://<API Server URL>/api/2.0/fo"
           },
           "FilterParameters": {
               "type": "string",
