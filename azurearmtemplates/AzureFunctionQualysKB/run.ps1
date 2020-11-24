@@ -82,7 +82,7 @@ function GetStartTime($CheckpointFile, $timeInterval){
     
     if ([System.IO.File]::Exists($CheckpointFile) -eq $false) {
         $CheckpointLog = @{}
-        $CheckpointLog.Add('LastSuccessfulTime',$firstStartTimeRecord)        
+        $CheckpointLog.Add('LastSuccessfulTime',$firstStartTimeRecord.ToString("yyyy-MM-ddTHH:mm:ssZ"))        
         $CheckpointLog.GetEnumerator() | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
         return $firstStartTimeRecord 
     }
@@ -117,7 +117,7 @@ $startDate = [datetime]::UtcNow.AddHours(-72)
 $endtime = $startDate
 
 # Invoke the API Request and assign the response to a variable ($response)
-$response = (Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate.ToString("yyyy-MM-ddTHH:mm:ssZ"))$filterparameters" -WebSession $sess) 
+$response = (Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters" -WebSession $sess) 
 
 
 # Iterate through each vulnerability recieved from the API call and assign the variables (Column Names in LA) to each XML variable and place each vulnerability as an object in the $objs array.
