@@ -10,7 +10,7 @@ if ($Timer.IsPastDue) {
 }
 
 
- $checkPointFile = "QualysKBCheckpoint.csv"
+ $CheckpointFile = "QualysKBCheckpoint.csv"
  $endTime = [datetime]::UtcNow
  $customerId = $env:workspaceId
  $sharedKey = $env:workspacekey
