@@ -20,8 +20,7 @@ if ($Timer.IsPastDue) {
  $timeInterval = $env:timeInterval
  $filterparameters = $env:filterParameters
  $Uri = $env:Uri
-
-
+     
 
 
 function Html-ToText {
@@ -74,15 +73,14 @@ function Html-ToText {
  return $html
 
 }
-
-# Function to retrieve the checkpoint start time of the last successful API call for a given logtype. Checkpoint file will be created if none exists
+ # Function to retrieve the checkpoint start time of the last successful API call for a given logtype. Checkpoint file will be created if none exists
 function GetStartTime($CheckpointFile, $timeInterval){
    
     $firstStartTimeRecord = [datetime]::UtcNow.AddHours(-$timeInterval)
     
     if ([System.IO.File]::Exists($CheckpointFile) -eq $false) {
         $CheckpointLog = @{}
-        $CheckpointLog.Add('LastSuccessfulTime',$firstStartTimeRecord)        
+        $CheckpointLog.Add('LastSuccessfulTime',$firstStartTimeRecord.ToString("yyyy-MM-ddTHH:mm:ssZ"))        
         $CheckpointLog.GetEnumerator() | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
         return $firstStartTimeRecord 
     }
@@ -98,67 +96,65 @@ function GetStartTime($CheckpointFile, $timeInterval){
 }
 
 
-
-
 # Function to update the checkpoint time with the last successful API call end time
 function UpdateCheckpointTime($CheckpointFile, $LastSuccessfulTime){
     $checkpoints = Import-Csv -Path $CheckpointFile
-    $checkpoints | ForEach-Object{ if($_.Key -eq 'LastSuccessfulTime'){$_.Value = $LastSuccessfulTime}}
+    $checkpoints | ForEach-Object{ if($_.Key -eq 'LastSuccessfulTime'){$_.Value = $LastSuccessfulTime.ToString("yyyy-MM-ddTHH:mm:ssZ")}}
     $checkpoints | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
 }
 
 
-$startDate = GetStartTime -CheckpointFile $checkPointFile  -timeInterval $timeInterval
-$hdrs = @{"X-Requested-With"="powershell"}  
-$base = "$Uri"
-$body = "action=login&username=$username&password=$password"  
-Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body -SessionVariable sess  
-$startTime = $startDate
+function QualysKB {
 
-# Invoke the API Request and assign the response to a variable ($response)
-$response = (Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters" -WebSession $sess) 
+    $startDate = GetStartTime -CheckpointFile $checkPointFile  -timeInterval $timeInterval
+    $hdrs = @{"X-Requested-With"="powershell"}  
+    $base = "$Uri"
+    $body = "action=login&username=$username&password=$password"  
+    Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body -SessionVariable sess  
+
+    # Invoke the API Request and assign the response to a variable ($response)
+    $response = (Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters" -WebSession $sess) 
 
 
-# Iterate through each vulnerability recieved from the API call and assign the variables (Column Names in LA) to each XML variable and place each vulnerability as an object in the $objs array.
-$objs = @()  
-0 .. $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.Length | ForEach-Object {  
-  $obj = New-Object PSObject  
-  if($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].QID -eq $null) {     # if the vuln ID is mull which will mean the entry is null, this occurs on the last entry of the response. Should only occur once.
-    Write-Host ("A null line was excluded") 
-  }
-  else {
-  Write-Output $_.solution
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name ID -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].QID  
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Title -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].TITLE."#cdata-section"
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Category -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CATEGORY
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Consequence -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CONSEQUENCE."#cdata-section"
-  $Diagnosisconverted = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DIAGNOSIS."#cdata-section")
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Diagnosis -Value $Diagnosisconverted
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Last_Service_Modification_DateTime -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].LAST_SERVICE_MODIFICATION_DATETIME
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Patchable -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PATCHABLE
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name CVE_ID -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CVE_LIST.CVE.ID."#cdata-section"
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name CVE_URL -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CVE_LIST.CVE.URL."#cdata-section"
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Vendor_Reference_ID -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VENDOR_REFERENCE_LIST.VENDOR_REFERENCE.ID."#cdata-section"
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Vendor_Reference_URL -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VENDOR_REFERENCE_LIST.VENDOR_REFERENCE.URL."#cdata-section"
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name PCI_Flag -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PCI_FLAG
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Published_DateTime -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PUBLISHED_DATETIME
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Severity_Level -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SEVERITY_LEVEL
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Software_Product -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOFTWARE_LIST.SOFTWARE.PRODUCT."#cdata-section"
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Software_Vendor -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOFTWARE_LIST.SOFTWARE.VENDOR."#cdata-section"
-  $Solutionconverted = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOLUTION."#cdata-section")
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Solution -Value $Solutionconverted
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Vuln_Type -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VULN_TYPE
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Discovery_Additional_Info -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.ADDITIONAL_INFO
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Discovery_Auth_Type -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.AUTH_TYPE_LIST.AUTH_TYPE
-  Add-Member -InputObject $obj -MemberType NoteProperty -Name Discovery_Remote -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.REMOTE
-  $objs += $obj  
+    # Iterate through each vulnerability recieved from the API call and assign the variables (Column Names in LA) to each XML variable and place each vulnerability as an object in the $objs array.
+        $objs = @()  
+        0 .. $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN.Length | ForEach-Object {  
+          $obj = New-Object PSObject  
+          if($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].QID -eq $null) {     # if the vuln ID is mull which will mean the entry is null, this occurs on the last entry of the response. Should only occur once.
+            Write-Host ("A null line was excluded") 
+          }
+          else {
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name ID -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].QID  
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Title -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].TITLE."#cdata-section"
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Category -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CATEGORY
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Consequence -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CONSEQUENCE."#cdata-section"
+          $Diagnosisconverted = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DIAGNOSIS."#cdata-section")
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Diagnosis -Value $Diagnosisconverted
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Last_Service_Modification_DateTime -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].LAST_SERVICE_MODIFICATION_DATETIME
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Patchable -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PATCHABLE
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name CVE_ID -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CVE_LIST.CVE.ID."#cdata-section"
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name CVE_URL -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].CVE_LIST.CVE.URL."#cdata-section"
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Vendor_Reference_ID -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VENDOR_REFERENCE_LIST.VENDOR_REFERENCE.ID."#cdata-section"
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Vendor_Reference_URL -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VENDOR_REFERENCE_LIST.VENDOR_REFERENCE.URL."#cdata-section"
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name PCI_Flag -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PCI_FLAG
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Published_DateTime -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].PUBLISHED_DATETIME
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Severity_Level -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SEVERITY_LEVEL
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Software_Product -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOFTWARE_LIST.SOFTWARE.PRODUCT."#cdata-section"
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Software_Vendor -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOFTWARE_LIST.SOFTWARE.VENDOR."#cdata-section"
+          $Solutionconverted = Html-ToText($response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].SOLUTION."#cdata-section")
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Solution -Value $Solutionconverted
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Vuln_Type -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].VULN_TYPE
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Discovery_Additional_Info -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.ADDITIONAL_INFO
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Discovery_Auth_Type -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.AUTH_TYPE_LIST.AUTH_TYPE
+          Add-Member -InputObject $obj -MemberType NoteProperty -Name Discovery_Remote -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.REMOTE
+          $objs += $obj  
 
-  # Logout of the Session
-  Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body "action=logout" -WebSession $sess 
 
-  }
+            }
+        }
    
- }
+# Logout of the Session
+    Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body "action=logout" -WebSession $sess    
 
 
 # Iterate through each vulnerabilty obj in the $objs array, covert it to JSON and POST it to the Log Analytics API individually        
@@ -174,7 +170,6 @@ $objs = @()
                 Write-Host "ERROR: Log Analytics POST, Status Code: $responseCode, unsuccessful."
             } 
             else {
-                $endTime = [datetime]::UtcNow
                 Write-Host "SUCCESS: Total Qualys events posted to Log Analytics: $mbytes MB" -ForegroundColor Green
                 UpdateCheckpointTime -CheckpointFile $checkPointFile -LastSuccessfulTime $endTime    
             }
@@ -185,14 +180,17 @@ $objs = @()
             }
         }
         else {
-           $startInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($startTime))
-           $endInterval = (Get-Date 01.01.1970)+([System.TimeSpan]::fromseconds($endTime))
+           Write-Output  ([DateTime]$startDate)
+           $startInterval = $startDate
+           $endInterval = $endTime.ToString("yyyy-MM-ddTHH:mm:ssZ")
            Write-Host "INFO: No new Qualys Vulnaribilites discovered between $startInterval and $endInterval"
-           UpdateCheckpointTime -CheckpointFile $checkPointFile  -LastSuccessfulTime $endTime
+         
            
         }
-         
-  
+ }
+
+
+
 
 # Function to build the authorization signature to post to Log Analytics
 function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
@@ -232,7 +230,7 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 
 
 
-
+QualysKB
 
 
 
