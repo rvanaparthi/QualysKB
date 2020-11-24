@@ -186,7 +186,7 @@
                           "uri": "[parameters('Uri')]",
                           "filterParameters": "[parameters('FilterParameters')]",
                           "timeInterval": "[parameters('TimeInterval')]",
-                          "WEBSITE_RUN_FROM_PACKAGE": "https://aka.ms/sentinelqualysvmazurefunctionzip"
+                          "WEBSITE_RUN_FROM_PACKAGE": "https://github.com/rvanaparthi/QualysKB/blob/main/azurearmtemplates/AzureFunctionQualysKB.zip?raw=true"
                                    } 
                   }
               ]
