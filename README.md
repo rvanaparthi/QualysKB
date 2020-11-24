@@ -1,8 +1,7 @@
 # QualysKB
 
-# CarbonBlackDefence
 
-Repository is for CarbonBlackDefence Deployment using Arm Templates
+Repository is for QualysKB Deployment using Arm Templates
 
 
 #### 1: Deploy via Azure ARM Template #####
