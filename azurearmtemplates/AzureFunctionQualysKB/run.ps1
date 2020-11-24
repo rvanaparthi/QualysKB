@@ -82,7 +82,7 @@ function GetStartTime($CheckpointFile, $timeInterval){
     
     if ([System.IO.File]::Exists($CheckpointFile) -eq $false) {
         $CheckpointLog = @{}
-        $CheckpointLog.Add('LastSuccessfulTime',$firstStartTimeRecord.ToString("yyyy-MM-ddTHH:mm:ssZ"))        
+        $CheckpointLog.Add('LastSuccessfulTime',$firstStartTimeRecord)        
         $CheckpointLog.GetEnumerator() | Select-Object -Property Key,Value | Export-CSV -Path $CheckpointFile -NoTypeInformation
         return $firstStartTimeRecord 
     }
@@ -110,11 +110,10 @@ function UpdateCheckpointTime($CheckpointFile, $LastSuccessfulTime){
 
 $startDate = GetStartTime -CheckpointFile $checkPointFile  -timeInterval $timeInterval
 $hdrs = @{"X-Requested-With"="powershell"}  
-$base = $Uri
+$base = "$Uri"
 $body = "action=login&username=$username&password=$password"  
 Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body $body -SessionVariable sess  
-$startDate = [datetime]::UtcNow.AddHours(-72)
-$endtime = $startDate
+$startTime = $startDate
 
 # Invoke the API Request and assign the response to a variable ($response)
 $response = (Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate)$filterparameters" -WebSession $sess) 
@@ -194,9 +193,6 @@ $objs = @()
         }
          
   
-# Invoke the API Request and assign the response to a variable ($response)
-$response = (Invoke-RestMethod -Headers $hdrs -Uri "$base/knowledge_base/vuln/?action=list&published_after=$($startDate.ToString("yyyy-MM-ddTHH:mm:ssZ"))$filterparameters" -WebSession $sess) 
-
 
 # Function to build the authorization signature to post to Log Analytics
 function Build-Signature ($customerId, $sharedKey, $date, $contentLength, $method, $contentType, $resource)
