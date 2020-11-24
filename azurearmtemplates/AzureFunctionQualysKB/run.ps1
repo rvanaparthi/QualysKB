@@ -154,6 +154,9 @@ $objs = @()
   Add-Member -InputObject $obj -MemberType NoteProperty -Name Discovery_Remote -Value $response.KNOWLEDGE_BASE_VULN_LIST_OUTPUT.RESPONSE.VULN_LIST.VULN[$_].DISCOVERY.REMOTE
   $objs += $obj  
 
+  # Logout of the Session
+  Invoke-RestMethod -Headers $hdrs -Uri "$base/session/" -Method Post -Body "action=logout" -WebSession $sess 
+
   }
    
  }
@@ -239,4 +242,3 @@ function Post-LogAnalyticsData($customerId, $sharedKey, $body, $logType)
 
 # Write an information log with the current time.
 Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
-
